@@ -1,0 +1,98 @@
+import { useState } from 'react'
+import { MapPin, Trash2, Tag, Loader2 } from 'lucide-react'
+import { useSavedPlaces, useDeletePlace } from '../hooks/useSavedPlaces'
+import type { PlaceCategory, SavedPlace } from '../types'
+import KakaoMap from '../components/KakaoMap'
+
+const CATEGORY_COLOR: Record<PlaceCategory | '기타', string> = {
+  음식점: 'bg-orange-100 text-orange-700',
+  카페: 'bg-amber-100 text-amber-700',
+  주점: 'bg-purple-100 text-purple-700',
+  기타: 'bg-gray-100 text-gray-600',
+}
+
+export default function SavedPlacesPage() {
+  const { data: places = [], isLoading } = useSavedPlaces()
+  const deletePlace = useDeletePlace()
+  const [selected, setSelected] = useState<SavedPlace | null>(null)
+
+  const mapCenter = selected
+    ? { lat: selected.lat, lng: selected.lng }
+    : places.length > 0
+    ? { lat: places[0].lat, lng: places[0].lng }
+    : { lat: 37.5665, lng: 126.9780 }
+
+  const markers = places.map((p) => ({ lat: p.lat, lng: p.lng, label: p.name }))
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="animate-spin text-blue-400" size={28} />
+      </div>
+    )
+  }
+
+  if (places.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400">
+        <MapPin size={32} className="opacity-40" />
+        <p className="text-sm">저장된 장소가 없습니다</p>
+        <p className="text-xs">중간지점 탭에서 마음에 드는 곳을 저장해보세요</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 지도 */}
+      <KakaoMap
+        center={mapCenter}
+        markers={markers}
+        zoom={selected ? 15 : 12}
+        className="w-full h-56 border-b border-gray-100"
+      />
+
+      {/* 장소 목록 */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+        {places.map((place) => (
+          <div
+            key={place.id}
+            onClick={() => setSelected(place.id === selected?.id ? null : place)}
+            className={`bg-white rounded-lg border px-4 py-3 cursor-pointer transition-all shadow-sm ${
+              selected?.id === place.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-100 hover:border-gray-200'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-gray-900 truncate">{place.name}</p>
+                  <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLOR[place.category] || CATEGORY_COLOR['기타']}`}>
+                    {place.category}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">{place.address}</p>
+                {place.memo && <p className="text-xs text-gray-600 mt-1">"{place.memo}"</p>}
+                {place.companions.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    <Tag size={11} className="text-gray-400" />
+                    {place.companions.map((c) => (
+                      <span key={c} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); deletePlace.mutate(place.id) }}
+                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-md transition-colors flex-shrink-0"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
