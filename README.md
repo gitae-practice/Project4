@@ -40,8 +40,7 @@
 
 ## 환경 변수
 
-`.env` 파일을 루트에 생성하고 아래 키를 입력합니다.
-
+`.env` 파일을 루트에 생성하고 아래 키를 입력
 ```
 VITE_KAKAO_APP_KEY=     # 카카오 JavaScript 키
 VITE_KAKAO_REST_KEY=    # 카카오 REST API 키
@@ -52,7 +51,7 @@ VITE_SUPABASE_ANON_KEY= # Supabase anon key
 
 ## Supabase 테이블 설정
 
-Supabase SQL 에디터에서 아래 쿼리를 실행합니다.
+Supabase SQL 에디터에서 아래 쿼리를 실행
 
 ```sql
 create table saved_places (
