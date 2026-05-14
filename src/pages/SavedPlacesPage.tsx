@@ -43,55 +43,59 @@ export default function SavedPlacesPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 지도 */}
-      <KakaoMap
-        center={mapCenter}
-        markers={markers}
-        zoom={selected ? 15 : 12}
-        className="w-full h-56 border-b border-gray-100"
-      />
-
-      {/* 장소 목록 */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {places.map((place) => (
-          <div
-            key={place.id}
-            onClick={() => setSelected(place.id === selected?.id ? null : place)}
-            className={`bg-white rounded-lg border px-4 py-3 cursor-pointer transition-all shadow-sm ${
-              selected?.id === place.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-100 hover:border-gray-200'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-gray-900 truncate">{place.name}</p>
-                  <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLOR[place.category] || CATEGORY_COLOR['기타']}`}>
-                    {place.category}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">{place.address}</p>
-                {place.memo && <p className="text-xs text-gray-600 mt-1">"{place.memo}"</p>}
-                {place.companions.length > 0 && (
-                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    <Tag size={11} className="text-gray-400" />
-                    {place.companions.map((c) => (
-                      <span key={c} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                        {c}
-                      </span>
-                    ))}
+    <div className="flex h-full">
+      {/* 왼쪽: 장소 목록 */}
+      <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+          {places.map((place) => (
+            <div
+              key={place.id}
+              onClick={() => setSelected(place.id === selected?.id ? null : place)}
+              className={`bg-white rounded-lg border px-4 py-3 cursor-pointer transition-all shadow-sm ${
+                selected?.id === place.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-100 hover:border-gray-200'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">{place.name}</p>
+                    <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLOR[place.category] || CATEGORY_COLOR['기타']}`}>
+                      {place.category}
+                    </span>
                   </div>
-                )}
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">{place.address}</p>
+                  {place.memo && <p className="text-xs text-gray-600 mt-1">"{place.memo}"</p>}
+                  {place.companions.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <Tag size={11} className="text-gray-400" />
+                      {place.companions.map((c) => (
+                        <span key={c} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deletePlace.mutate(place.id) }}
+                  className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-md transition-colors flex-shrink-0"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); deletePlace.mutate(place.id) }}
-                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-md transition-colors flex-shrink-0"
-              >
-                <Trash2 size={13} />
-              </button>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
+
+      {/* 오른쪽: 지도 */}
+      <div className="flex-1">
+        <KakaoMap
+          center={mapCenter}
+          markers={markers}
+          zoom={selected ? 15 : 12}
+          className="w-full h-full"
+        />
       </div>
     </div>
   )

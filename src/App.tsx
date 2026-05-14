@@ -23,14 +23,14 @@ function AppContent() {
   const [tab, setTab] = useState<TabId>('midpoint')
 
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-sm">
+    <div className="flex flex-col h-screen bg-white">
       {/* 헤더 */}
-      <header className="flex-shrink-0 px-4 py-3 border-b border-gray-100 bg-white">
+      <header className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white">
         <h1 className="text-base font-semibold text-gray-900">중간어디</h1>
       </header>
 
       {/* 페이지 콘텐츠 */}
-      <main className="flex-1 overflow-y-auto bg-gray-50">
+      <main className="flex-1 min-h-0 overflow-hidden bg-gray-50">
         {tab === 'midpoint' && <MidpointPage />}
         {tab === 'saved' && <SavedPlacesPage />}
         {tab === 'routes' && <RoutesPage />}
@@ -38,7 +38,7 @@ function AppContent() {
       </main>
 
       {/* 하단 탭 바 */}
-      <nav className="flex-shrink-0 flex border-t border-gray-100 bg-white">
+      <nav className="flex-shrink-0 flex w-96 border-t border-r border-gray-100 bg-white">
         {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}

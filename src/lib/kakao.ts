@@ -4,7 +4,7 @@ const REST_KEY = import.meta.env.VITE_KAKAO_REST_KEY
 
 // 공통 fetch 헬퍼 — 중복 제거
 async function kakaoFetch(endpoint: string, params: URLSearchParams): Promise<any> {
-  const res = await fetch(`https://dapi.kakao.com${endpoint}?${params}`, {
+  const res = await fetch(`/kakao-api${endpoint}?${params}`, {
     headers: { Authorization: `KakaoAK ${REST_KEY}` },
   })
   if (!res.ok) throw new Error(`카카오 API 오류: ${res.status}`)
@@ -57,18 +57,17 @@ export async function searchByCategory(
 // 키워드로 장소 검색
 export async function searchKeyword(
   query: string,
-  lat: number,
-  lng: number,
+  lat?: number,
+  lng?: number,
   radius = 2000
 ): Promise<KakaoPlace[]> {
-  const params = new URLSearchParams({
-    query,
-    x: String(lng),
-    y: String(lat),
-    radius: String(radius),
-    size: '15',
-    sort: 'distance',
-  })
+  const params = new URLSearchParams({ query, size: '8' })
+  if (lat !== undefined && lng !== undefined) {
+    params.set('x', String(lng))
+    params.set('y', String(lat))
+    params.set('radius', String(radius))
+    params.set('sort', 'distance')
+  }
   const data = await kakaoFetch('/v2/local/search/keyword.json', params)
   return data.documents
 }
