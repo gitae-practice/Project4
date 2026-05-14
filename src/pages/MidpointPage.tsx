@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react'
-import { Plus, X, Search, MapPin, Loader2, Bookmark } from 'lucide-react'
-import { geocode, calcMidpoint, searchByCategory, CATEGORY } from '../lib/kakao'
+import { useState, useMemo, useRef } from 'react'
+import { Plus, X, Search, MapPin, Loader2, Bookmark, Check } from 'lucide-react'
+import { geocode, calcMidpoint, searchByCategory, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
 import KakaoMap from '../components/KakaoMap'
 
-type Point = { name: string; lat: number; lng: number }
+type Coord = { lat: number; lng: number; name: string }
+type InputItem = { text: string; coord: Coord | null }
 
 const TABS = [
   { label: '음식점', code: CATEGORY.RESTAURANT, category: '음식점' as PlaceCategory },
@@ -16,8 +17,11 @@ const TABS = [
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
 
 export default function MidpointPage() {
-  const [inputs, setInputs] = useState(['', ''])
-  const [points, setPoints] = useState<Point[]>([])
+  const [inputs, setInputs] = useState<InputItem[]>([{ text: '', coord: null }, { text: '', coord: null }])
+  const [suggestions, setSuggestions] = useState<Record<number, KakaoPlace[]>>({})
+  const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+
+  const [points, setPoints] = useState<Coord[]>([])
   const [midpoint, setMidpoint] = useState<{ lat: number; lng: number } | null>(null)
   const [places, setPlaces] = useState<KakaoPlace[]>([])
   const [activeTab, setActiveTab] = useState(0)
@@ -26,33 +30,48 @@ export default function MidpointPage() {
 
   const createPlace = useCreatePlace()
   const { data: savedPlaces = [] } = useSavedPlaces()
-
   const savedNames = useMemo(() => new Set(savedPlaces.map((p) => p.name)), [savedPlaces])
 
-  function isSaved(place: KakaoPlace) {
-    return savedNames.has(place.place_name)
+  function isSaved(place: KakaoPlace) { return savedNames.has(place.place_name) }
+
+  function handleInputChange(i: number, val: string) {
+    setInputs((prev) => prev.map((inp, idx) => idx === i ? { text: val, coord: null } : inp))
+    clearTimeout(timers.current[i])
+    if (!val.trim()) { setSuggestions((prev) => ({ ...prev, [i]: [] })); return }
+    timers.current[i] = setTimeout(async () => {
+      try {
+        const results = await searchKeyword(val)
+        setSuggestions((prev) => ({ ...prev, [i]: results.slice(0, 5) }))
+      } catch { setSuggestions((prev) => ({ ...prev, [i]: [] })) }
+    }, 300)
   }
 
-  function addInput() { setInputs((prev) => [...prev, '']) }
-  function removeInput(i: number) { setInputs((prev) => prev.filter((_, idx) => idx !== i)) }
-  function updateInput(i: number, val: string) {
-    setInputs((prev) => prev.map((v, idx) => (idx === i ? val : v)))
+  function selectSuggestion(i: number, place: KakaoPlace) {
+    setInputs((prev) => prev.map((inp, idx) => idx === i
+      ? { text: place.place_name, coord: { lat: Number(place.y), lng: Number(place.x), name: place.place_name } }
+      : inp
+    ))
+    setSuggestions((prev) => ({ ...prev, [i]: [] }))
+  }
+
+  function addInput() { setInputs((prev) => [...prev, { text: '', coord: null }]) }
+  function removeInput(i: number) {
+    setInputs((prev) => prev.filter((_, idx) => idx !== i))
+    setSuggestions((prev) => { const next = { ...prev }; delete next[i]; return next })
   }
 
   async function handleSearch() {
-    const queries = inputs.map((v) => v.trim()).filter(Boolean)
-    if (queries.length < 2) { setSearchError('출발지를 2개 이상 입력해주세요'); return }
+    const filled = inputs.filter((inp) => inp.text.trim())
+    if (filled.length < 2) { setSearchError('출발지를 2개 이상 입력해주세요'); return }
     setLoading(true)
     setSearchError('')
 
     try {
-      const results = await Promise.all(queries.map(geocode))
-      const valid = results.filter(Boolean) as Point[]
-
-      if (valid.length < 2) {
-        setSearchError('주소를 찾을 수 없는 항목이 있습니다')
-        return
-      }
+      const resolved = await Promise.all(
+        filled.map((inp) => inp.coord ? Promise.resolve(inp.coord) : geocode(inp.text))
+      )
+      const valid = resolved.filter(Boolean) as Coord[]
+      if (valid.length < 2) { setSearchError('주소를 찾을 수 없는 항목이 있습니다'); return }
 
       const mid = calcMidpoint(valid)
       setPoints(valid)
@@ -61,7 +80,7 @@ export default function MidpointPage() {
       const nearby = await searchByCategory(TABS[activeTab].code, mid.lat, mid.lng)
       setPlaces(nearby)
     } catch (e) {
-      setSearchError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      setSearchError('검색 중 오류가 발생했습니다.')
       console.error(e)
     } finally {
       setLoading(false)
@@ -75,11 +94,8 @@ export default function MidpointPage() {
     try {
       const nearby = await searchByCategory(TABS[idx].code, midpoint.lat, midpoint.lng)
       setPlaces(nearby)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
   function handleSave(place: KakaoPlace) {
@@ -103,21 +119,38 @@ export default function MidpointPage() {
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽 패널: 입력 + 결과 */}
+      {/* 왼쪽 패널 */}
       <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white">
         {/* 출발지 입력 */}
-        <div className="p-4 flex flex-col gap-2 border-b border-gray-100">
-          {inputs.map((val, i) => (
+        <div className="p-4 flex flex-col gap-2 border-b border-gray-100 flex-shrink-0">
+          {inputs.map((inp, i) => (
             <div key={i} className="flex gap-2">
-              <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 transition-colors">
-                <MapPin size={14} className="text-gray-400 flex-shrink-0" />
-                <input
-                  value={val}
-                  onChange={(e) => updateInput(i, e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder={i === 0 ? '내 출발지' : `상대방 출발지 ${i}`}
-                  className="flex-1 text-sm outline-none bg-transparent"
-                />
+              <div className="flex-1 relative">
+                <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 transition-colors">
+                  <MapPin size={14} className="text-gray-400 flex-shrink-0" />
+                  <input
+                    value={inp.text}
+                    onChange={(e) => handleInputChange(i, e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder={i === 0 ? '내 출발지' : `상대방 출발지 ${i}`}
+                    className="flex-1 text-sm outline-none bg-transparent"
+                  />
+                  {inp.coord && <Check size={13} className="text-green-500 flex-shrink-0" />}
+                </div>
+                {(suggestions[i] ?? []).length > 0 && (
+                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {(suggestions[i] ?? []).map((p) => (
+                      <button
+                        key={p.id}
+                        onMouseDown={() => selectSuggestion(i, p)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0"
+                      >
+                        <p className="text-sm text-gray-800">{p.place_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{p.road_address_name || p.address_name}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {inputs.length > 2 && (
                 <button onClick={() => removeInput(i)} className="p-2 text-gray-400 hover:text-red-400 transition-colors">
@@ -128,10 +161,7 @@ export default function MidpointPage() {
           ))}
 
           <div className="flex gap-2 mt-1">
-            <button
-              onClick={addInput}
-              className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors px-2 py-1"
-            >
+            <button onClick={addInput} className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors px-2 py-1">
               <Plus size={13} /> 추가
             </button>
             <button
@@ -166,7 +196,7 @@ export default function MidpointPage() {
         )}
 
         {/* 장소 목록 */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto p-4 pb-16 flex flex-col gap-2">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-blue-400" size={24} />
@@ -194,7 +224,6 @@ export default function MidpointPage() {
                     className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                       saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
                     }`}
-                    title={saved ? '이미 저장됨' : '저장'}
                   >
                     <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
                   </button>
@@ -205,7 +234,7 @@ export default function MidpointPage() {
         </div>
       </div>
 
-      {/* 오른쪽 패널: 지도 */}
+      {/* 오른쪽: 지도 */}
       <div className="flex-1 relative">
         <KakaoMap
           center={midpoint || DEFAULT_CENTER}

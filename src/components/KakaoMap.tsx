@@ -4,23 +4,22 @@ declare global {
   interface Window { kakao: any }
 }
 
-type Marker = {
-  lat: number
-  lng: number
-  label?: string
-}
+type Marker = { lat: number; lng: number; label?: string }
+type Polyline = { path: { lat: number; lng: number }[]; color?: string; weight?: number }
 
 type Props = {
   center: { lat: number; lng: number }
   markers?: Marker[]
+  polylines?: Polyline[]
   zoom?: number
   className?: string
 }
 
-export default function KakaoMap({ center, markers = [], zoom = 14, className = '' }: Props) {
+export default function KakaoMap({ center, markers = [], polylines = [], zoom = 14, className = '' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const markerRefs = useRef<any[]>([])
+  const polylineRefs = useRef<any[]>([])
 
   useEffect(() => {
     if (!containerRef.current || !window.kakao) return
@@ -32,16 +31,13 @@ export default function KakaoMap({ center, markers = [], zoom = 14, className = 
     })
   }, [])
 
-  // 중심 좌표 변경 시 지도 이동
   useEffect(() => {
     if (!mapRef.current) return
     mapRef.current.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng))
   }, [center.lat, center.lng])
 
-  // 마커 목록 변경 시 기존 마커 제거 후 재렌더링
   useEffect(() => {
     if (!mapRef.current || !window.kakao) return
-
     markerRefs.current.forEach((m) => m.setMap(null))
     markerRefs.current = []
 
@@ -61,6 +57,25 @@ export default function KakaoMap({ center, markers = [], zoom = 14, className = 
       }
     })
   }, [markers])
+
+  useEffect(() => {
+    if (!mapRef.current || !window.kakao) return
+    polylineRefs.current.forEach((p) => p.setMap(null))
+    polylineRefs.current = []
+
+    polylines.forEach(({ path, color = '#3B82F6', weight = 5 }) => {
+      const linePath = path.map((p) => new window.kakao.maps.LatLng(p.lat, p.lng))
+      const polyline = new window.kakao.maps.Polyline({
+        path: linePath,
+        strokeWeight: weight,
+        strokeColor: color,
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid',
+      })
+      polyline.setMap(mapRef.current)
+      polylineRefs.current.push(polyline)
+    })
+  }, [polylines])
 
   return <div ref={containerRef} className={className} />
 }

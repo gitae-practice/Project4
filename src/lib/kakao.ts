@@ -72,6 +72,55 @@ export async function searchKeyword(
   return data.documents
 }
 
+// 카카오 모빌리티 길찾기 — 최대 3개 경로 반환
+export type RouteOption = {
+  priority: string
+  label: string
+  duration: number   // 초
+  distance: number   // 미터
+  path: { lat: number; lng: number }[]
+}
+
+export async function getDirections(
+  origin: { lat: number; lng: number },
+  dest: { lat: number; lng: number }
+): Promise<RouteOption[]> {
+  const params = new URLSearchParams({
+    origin: `${origin.lng},${origin.lat}`,
+    destination: `${dest.lng},${dest.lat}`,
+    alternatives: 'true',
+    priority: 'RECOMMEND',
+  })
+  const res = await fetch(`/kakao-navi/v1/directions?${params}`, {
+    headers: { Authorization: `KakaoAK ${REST_KEY}` },
+  })
+  if (!res.ok) throw new Error(`길찾기 오류: ${res.status}`)
+  const data = await res.json()
+
+  const LABELS: Record<string, string> = { RECOMMEND: '추천', TIME: '빠른길', DISTANCE: '최단거리' }
+
+  return (data.routes as any[])
+    .filter((r) => r.result_code === 0)
+    .map((r) => {
+      const path: { lat: number; lng: number }[] = []
+      for (const section of r.sections) {
+        for (const road of section.roads) {
+          const v: number[] = road.vertexes
+          for (let i = 0; i < v.length; i += 2) {
+            path.push({ lng: v[i], lat: v[i + 1] })
+          }
+        }
+      }
+      return {
+        priority: r.summary.priority,
+        label: LABELS[r.summary.priority] ?? r.summary.priority,
+        duration: r.summary.duration,
+        distance: r.summary.distance,
+        path,
+      }
+    })
+}
+
 // 여러 좌표의 중간지점 계산 (위도/경도 평균)
 export function calcMidpoint(points: { lat: number; lng: number }[]): { lat: number; lng: number } {
   const sum = points.reduce((acc, p) => ({ lat: acc.lat + p.lat, lng: acc.lng + p.lng }), { lat: 0, lng: 0 })
