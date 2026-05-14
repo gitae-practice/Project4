@@ -32,7 +32,7 @@ VITE_SUPABASE_ANON_KEY= # Supabase anon key
 
 ## DB 설정
 
-`supabase_schema.sql` 파일을 Supabase SQL Editor에서 실행하면 필요한 테이블이 생성됩니다.
+`supabase_schema.sql` 파일을 Supabase SQL Editor에서 실행하면 필요한 테이블이 생성.
 
 ## 실행 방법
 
