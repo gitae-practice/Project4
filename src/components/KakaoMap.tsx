@@ -5,7 +5,7 @@ declare global {
 }
 
 type Marker = { lat: number; lng: number; label?: string }
-type Polyline = { path: { lat: number; lng: number }[]; color?: string; weight?: number }
+type Polyline = { path: { lat: number; lng: number }[]; color?: string; weight?: number; dashed?: boolean }
 
 type Props = {
   center: { lat: number; lng: number }
@@ -63,14 +63,14 @@ export default function KakaoMap({ center, markers = [], polylines = [], zoom = 
     polylineRefs.current.forEach((p) => p.setMap(null))
     polylineRefs.current = []
 
-    polylines.forEach(({ path, color = '#3B82F6', weight = 5 }) => {
+    polylines.forEach(({ path, color = '#3B82F6', weight = 5, dashed = false }) => {
       const linePath = path.map((p) => new window.kakao.maps.LatLng(p.lat, p.lng))
       const polyline = new window.kakao.maps.Polyline({
         path: linePath,
         strokeWeight: weight,
         strokeColor: color,
         strokeOpacity: 0.8,
-        strokeStyle: 'solid',
+        strokeStyle: dashed ? 'dashed' : 'solid',
       })
       polyline.setMap(mapRef.current)
       polylineRefs.current.push(polyline)
