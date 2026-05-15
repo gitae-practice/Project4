@@ -54,6 +54,19 @@ export async function searchByCategory(
   return data.documents
 }
 
+// 결과 없으면 반경을 단계적으로 넓혀서 재검색
+export async function searchByCategoryWithFallback(
+  categoryCode: string,
+  lat: number,
+  lng: number
+): Promise<{ places: KakaoPlace[]; radius: number }> {
+  for (const radius of [1500, 3000, 5000, 10000]) {
+    const places = await searchByCategory(categoryCode, lat, lng, radius)
+    if (places.length > 0) return { places, radius }
+  }
+  return { places: [], radius: 10000 }
+}
+
 // 키워드로 장소 검색
 export async function searchKeyword(
   query: string,

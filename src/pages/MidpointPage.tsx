@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { Plus, X, Search, MapPin, Loader2, Bookmark, Check } from 'lucide-react'
-import { geocode, calcMidpoint, searchByCategory, searchKeyword, CATEGORY } from '../lib/kakao'
+import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
 import KakaoMap from '../components/KakaoMap'
@@ -16,6 +16,10 @@ const TABS = [
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
 
+function formatRadius(m: number) {
+  return m >= 1000 ? `${m / 1000}km` : `${m}m`
+}
+
 export default function MidpointPage() {
   const [inputs, setInputs] = useState<InputItem[]>([{ text: '', coord: null }, { text: '', coord: null }])
   const [suggestions, setSuggestions] = useState<Record<number, KakaoPlace[]>>({})
@@ -24,6 +28,7 @@ export default function MidpointPage() {
   const [points, setPoints] = useState<Coord[]>([])
   const [midpoint, setMidpoint] = useState<{ lat: number; lng: number } | null>(null)
   const [places, setPlaces] = useState<KakaoPlace[]>([])
+  const [searchRadius, setSearchRadius] = useState<number>(1500)
   const [activeTab, setActiveTab] = useState(0)
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
@@ -77,8 +82,9 @@ export default function MidpointPage() {
       setPoints(valid)
       setMidpoint(mid)
 
-      const nearby = await searchByCategory(TABS[activeTab].code, mid.lat, mid.lng)
+      const { places: nearby, radius } = await searchByCategoryWithFallback(TABS[activeTab].code, mid.lat, mid.lng)
       setPlaces(nearby)
+      setSearchRadius(radius)
     } catch (e) {
       setSearchError('검색 중 오류가 발생했습니다.')
       console.error(e)
@@ -92,8 +98,9 @@ export default function MidpointPage() {
     if (!midpoint) return
     setLoading(true)
     try {
-      const nearby = await searchByCategory(TABS[idx].code, midpoint.lat, midpoint.lng)
+      const { places: nearby, radius } = await searchByCategoryWithFallback(TABS[idx].code, midpoint.lat, midpoint.lng)
       setPlaces(nearby)
+      setSearchRadius(radius)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -209,27 +216,34 @@ export default function MidpointPage() {
               <p className="text-sm">출발지를 입력하고 검색하세요</p>
             </div>
           ) : (
-            places.map((place) => {
-              const saved = isSaved(place)
-              return (
-                <div key={place.id} className="bg-white rounded-lg border border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{place.place_name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
-                    {place.phone && <p className="text-xs text-gray-400">{place.phone}</p>}
+            <>
+              {searchRadius > 1500 && (
+                <p className="text-xs text-amber-500 px-1">
+                  중간지점 근처에 결과가 없어 반경 {formatRadius(searchRadius)} 이내로 확장했습니다
+                </p>
+              )}
+              {places.map((place) => {
+                const saved = isSaved(place)
+                return (
+                  <div key={place.id} className="bg-white rounded-lg border border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{place.place_name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
+                      {place.phone && <p className="text-xs text-gray-400">{place.phone}</p>}
+                    </div>
+                    <button
+                      onClick={() => handleSave(place)}
+                      disabled={saved}
+                      className={`p-2 rounded-md transition-colors flex-shrink-0 ${
+                        saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                      }`}
+                    >
+                      <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleSave(place)}
-                    disabled={saved}
-                    className={`p-2 rounded-md transition-colors flex-shrink-0 ${
-                      saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
-                    }`}
-                  >
-                    <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-              )
-            })
+                )
+              })}
+            </>
           )}
         </div>
       </div>
