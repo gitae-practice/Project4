@@ -209,7 +209,10 @@ export default function MidpointPage() {
               <Loader2 className="animate-spin text-blue-400" size={24} />
             </div>
           ) : midpoint && places.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">주변에 장소가 없습니다</p>
+            <div className="flex flex-col items-center text-center gap-1 py-8 px-2">
+              <p className="text-sm text-gray-400">반경 10km 이내에 장소가 없습니다</p>
+              <p className="text-xs text-gray-300">두 출발지 거리가 너무 멀거나 중간지점이 바다 위일 수 있습니다</p>
+            </div>
           ) : !midpoint ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-300">
               <MapPin size={32} />
