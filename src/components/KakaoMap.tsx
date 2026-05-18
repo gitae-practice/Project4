@@ -111,7 +111,8 @@ export default function KakaoMap({ center, markers = [], polylines = [], zoom = 
         myLocationRef.current.setMap(mapRef.current)
         setLocating(false)
       },
-      () => setLocating(false)
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
 
