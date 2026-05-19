@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw } from 'lucide-react'
-import { geocode, calcMidpoint, searchByCategoryWithFallback, searchBarWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
+import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeywordWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
 import type { NavPoint } from '../App'
@@ -18,7 +18,16 @@ type Props = {
 const TABS = [
   { label: '음식점', code: CATEGORY.RESTAURANT, category: '음식점' as PlaceCategory },
   { label: '카페', code: CATEGORY.CAFE, category: '카페' as PlaceCategory },
-  { label: '주점', code: null, category: '주점' as PlaceCategory },
+  { label: '기타', code: null, category: '기타' as PlaceCategory },
+]
+
+type SubItem = { label: string; code?: string; keyword?: string }
+const OTHER_SUBS: SubItem[] = [
+  { label: '편의점', code: 'CS2' },
+  { label: '노래방', keyword: '노래방' },
+  { label: '영화관', keyword: '영화관' },
+  { label: '관광명소', code: 'AT4' },
+  { label: '볼링장', keyword: '볼링장' },
 ]
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
@@ -37,6 +46,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   const [places, setPlaces] = useState<KakaoPlace[]>([])
   const [searchRadius, setSearchRadius] = useState<number>(1500)
   const [activeTab, setActiveTab] = useState(0)
+  const [activeSub, setActiveSub] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
 
@@ -44,7 +54,6 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   const { data: savedPlaces = [] } = useSavedPlaces()
   const savedNames = useMemo(() => new Set(savedPlaces.map((p) => p.name)), [savedPlaces])
 
-  // 위치공유 탭에서 프리셋으로 넘어온 경우 자동 검색
   useEffect(() => {
     if (!preset || preset.length < 2) return
     const coords = preset.map(p => ({ lat: p.lat, lng: p.lng, name: p.name }))
@@ -53,11 +62,12 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     setPoints(coords)
     setMidpoint(mid)
     setLoading(true)
-    searchPlaces(0, mid.lat, mid.lng)
+    fetchPlaces(0, null, mid.lat, mid.lng)
       .then(({ places: nearby, radius }) => {
         setPlaces(nearby)
         setSearchRadius(radius)
         setActiveTab(0)
+        setActiveSub(null)
       })
       .catch(console.error)
       .finally(() => {
@@ -96,12 +106,16 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     setPlaces([])
     setSearchRadius(1500)
     setSearchError('')
+    setActiveSub(null)
   }
 
-  async function searchPlaces(tabIdx: number, lat: number, lng: number) {
+  async function fetchPlaces(tabIdx: number, subIdx: number | null, lat: number, lng: number) {
     const tab = TABS[tabIdx]
     if (tab.code) return searchByCategoryWithFallback(tab.code, lat, lng)
-    return searchBarWithFallback(lat, lng)
+    if (subIdx === null) return { places: [], radius: 1500 }
+    const sub = OTHER_SUBS[subIdx]
+    if (sub.code) return searchByCategoryWithFallback(sub.code, lat, lng)
+    return searchKeywordWithFallback(sub.keyword!, lat, lng)
   }
 
   function addInput() { setInputs((prev) => [...prev, { text: '', coord: null }]) }
@@ -127,7 +141,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
       setPoints(valid)
       setMidpoint(mid)
 
-      const { places: nearby, radius } = await searchPlaces(activeTab, mid.lat, mid.lng)
+      const { places: nearby, radius } = await fetchPlaces(activeTab, activeSub, mid.lat, mid.lng)
       setPlaces(nearby)
       setSearchRadius(radius)
     } catch (e) {
@@ -140,10 +154,24 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
 
   async function handleTabChange(idx: number) {
     setActiveTab(idx)
+    setActiveSub(null)
+    if (!midpoint) return
+    if (idx === 2) { setPlaces([]); return }
+    setLoading(true)
+    try {
+      const { places: nearby, radius } = await fetchPlaces(idx, null, midpoint.lat, midpoint.lng)
+      setPlaces(nearby)
+      setSearchRadius(radius)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  async function handleSubChange(subIdx: number) {
+    setActiveSub(subIdx)
     if (!midpoint) return
     setLoading(true)
     try {
-      const { places: nearby, radius } = await searchPlaces(idx, midpoint.lat, midpoint.lng)
+      const { places: nearby, radius } = await fetchPlaces(2, subIdx, midpoint.lat, midpoint.lng)
       setPlaces(nearby)
       setSearchRadius(radius)
     } catch (e) { console.error(e) }
@@ -238,7 +266,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
               {TABS.map((tab, i) => (
                 <button
-                  key={tab.code}
+                  key={tab.label}
                   onClick={() => handleTabChange(i)}
                   className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${
                     activeTab === i ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500'
@@ -248,6 +276,25 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
                 </button>
               ))}
             </div>
+
+            {/* 기타 서브 카테고리 */}
+            {activeTab === 2 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {OTHER_SUBS.map((sub, i) => (
+                  <button
+                    key={sub.label}
+                    onClick={() => handleSubChange(i)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      activeSub === i
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-500'
+                    }`}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -256,6 +303,11 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-blue-400" size={24} />
+            </div>
+          ) : activeTab === 2 && activeSub === null ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-300">
+              <MapPin size={32} />
+              <p className="text-sm">위에서 카테고리를 선택하세요</p>
             </div>
           ) : midpoint && places.length === 0 ? (
             <div className="flex flex-col items-center text-center gap-1 py-8 px-2">

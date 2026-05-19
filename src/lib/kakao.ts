@@ -66,14 +66,15 @@ export async function searchByCategoryWithFallback(
   return { places: [], radius: 10000 }
 }
 
-// 주점 키워드 검색 (카카오에 주점 카테고리 코드 없음)
-export async function searchBarWithFallback(
+// 키워드 기반 주변 검색 — 반경을 단계적으로 넓혀서 재검색
+export async function searchKeywordWithFallback(
+  keyword: string,
   lat: number,
   lng: number
 ): Promise<{ places: KakaoPlace[]; radius: number }> {
   for (const radius of [1500, 3000, 5000, 10000]) {
     const params = new URLSearchParams({
-      query: '주점',
+      query: keyword,
       x: String(lng),
       y: String(lat),
       radius: String(radius),
