@@ -27,7 +27,6 @@ const OTHER_SUBS: SubItem[] = [
   { label: '노래방', keyword: '노래방' },
   { label: '영화관', keyword: '영화관' },
   { label: '관광명소', code: 'AT4' },
-  { label: '볼링장', keyword: '볼링장' },
 ]
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
