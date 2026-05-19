@@ -50,18 +50,14 @@ function AppContent() {
               onNavigateToRoute={goToRoute}
             />
           </div>
-          <div className={tab === 'saved' ? 'h-full' : 'hidden'}>
-            <SavedPlacesPage />
-          </div>
-          <div className={tab === 'routes' ? 'h-full' : 'hidden'}>
+          {tab === 'saved' && <SavedPlacesPage />}
+          {tab === 'routes' && (
             <RoutesPage
               destPreset={routeDest}
               onDestPresetApplied={() => setRouteDest(null)}
             />
-          </div>
-          <div className={tab === 'share' ? 'h-full' : 'hidden'}>
-            <LocationSharePage onNavigateToMidpoint={goToMidpoint} />
-          </div>
+          )}
+          {tab === 'share' && <LocationSharePage onNavigateToMidpoint={goToMidpoint} />}
         </main>
         <nav className="absolute bottom-0 left-0 w-96 flex border-t border-r border-gray-100 bg-white z-10">
           {TABS.map(({ id, label, Icon }) => (
