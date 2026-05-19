@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
-import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike, GripVertical } from 'lucide-react'
+import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike, GripVertical, LocateFixed, RotateCcw } from 'lucide-react'
 import { useRoutes, useCreateRoute, useDeleteRoute } from '../hooks/useRoutes'
 import { getWeather } from '../lib/weather'
 import { searchKeyword, getDirections } from '../lib/kakao'
@@ -58,6 +58,8 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
   const [destSuggestions, setDestSuggestions] = useState<KakaoPlace[]>([])
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [locatingOrigin, setLocatingOrigin] = useState(false)
+  const [locatingDest, setLocatingDest] = useState(false)
 
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null)
   const [transportMode, setTransportMode] = useState<TransportMode>('car')
@@ -162,6 +164,35 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
     setOriginCoord(null); setDestCoord(null)
     setOriginSuggestions([]); setDestSuggestions([])
     setFormError(''); setAdding(false)
+    setSelectedRoute(null); setRouteOptions([])
+  }
+
+  function locateOrigin() {
+    if (!navigator.geolocation) return
+    setLocatingOrigin(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setOriginInput('내 위치')
+        setOriginCoord({ name: '내 위치', lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocatingOrigin(false)
+      },
+      () => setLocatingOrigin(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  function locateDest() {
+    if (!navigator.geolocation) return
+    setLocatingDest(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDestInput('내 위치')
+        setDestCoord({ name: '내 위치', lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocatingDest(false)
+      },
+      () => setLocatingDest(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
   }
 
   async function fetchDirectionsFor(route: Route, mode: TransportMode) {
@@ -267,12 +298,22 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
         {/* 경로 목록 */}
         <div className="flex-1 overflow-y-auto p-4 pb-16 flex flex-col gap-3">
           {!adding && (
-            <button
-              onClick={() => setAdding(true)}
-              className="flex items-center justify-center gap-2 w-full border border-dashed border-gray-200 rounded-lg py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-colors bg-white"
-            >
-              <Plus size={15} /> 경로 추가
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAdding(true)}
+                className="flex-1 flex items-center justify-center gap-2 border border-dashed border-gray-200 rounded-lg py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-colors bg-white"
+              >
+                <Plus size={15} /> 경로 추가
+              </button>
+              {selectedRoute && (
+                <button
+                  onClick={resetForm}
+                  className="flex items-center gap-1 px-3 text-sm text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  <RotateCcw size={13} /> 초기화
+                </button>
+              )}
+            </div>
           )}
 
           {adding && (
@@ -286,7 +327,12 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 bg-white">
                   <MapPin size={13} className="text-gray-400 flex-shrink-0" />
                   <input value={originInput} onChange={(e) => handleOriginChange(e.target.value)} placeholder="출발지 검색" className="flex-1 text-sm outline-none bg-transparent" />
-                  {originCoord && <Check size={13} className="text-green-500 flex-shrink-0" />}
+                  {originCoord
+                    ? <Check size={13} className="text-green-500 flex-shrink-0" />
+                    : <button onClick={locateOrigin} disabled={locatingOrigin} className="text-gray-300 hover:text-blue-400 transition-colors flex-shrink-0" title="내 현재 위치">
+                        {locatingOrigin ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+                      </button>
+                  }
                 </div>
                 {originSuggestions.length > 0 && (
                   <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
@@ -303,7 +349,12 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 bg-white">
                   <MapPin size={13} className="text-blue-400 flex-shrink-0" />
                   <input value={destInput} onChange={(e) => handleDestChange(e.target.value)} placeholder="도착지 검색" className="flex-1 text-sm outline-none bg-transparent" />
-                  {destCoord && <Check size={13} className="text-green-500 flex-shrink-0" />}
+                  {destCoord
+                    ? <Check size={13} className="text-green-500 flex-shrink-0" />
+                    : <button onClick={locateDest} disabled={locatingDest} className="text-gray-300 hover:text-blue-400 transition-colors flex-shrink-0" title="내 현재 위치">
+                        {locatingDest ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+                      </button>
+                  }
                 </div>
                 {destSuggestions.length > 0 && (
                   <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">

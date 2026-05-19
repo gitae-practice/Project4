@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { SavedPlace } from '../types'
+import type { SavedPlace, PlaceGroup } from '../types'
 
 export function useSavedPlaces() {
   return useQuery({
@@ -23,7 +23,17 @@ export function useCreatePlace() {
       const { error } = await supabase.from('saved_places').insert(place)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
+    onMutate: async (newPlace) => {
+      await qc.cancelQueries({ queryKey: ['saved_places'] })
+      const prev = qc.getQueryData<SavedPlace[]>(['saved_places']) ?? []
+      const optimistic: SavedPlace = { ...newPlace, id: '__temp__', created_at: new Date().toISOString() }
+      qc.setQueryData<SavedPlace[]>(['saved_places'], [optimistic, ...prev])
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['saved_places'], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
   })
 }
 
@@ -46,5 +56,57 @@ export function useUpdatePlace() {
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
+  })
+}
+
+export function useUpdatePlaceGroup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, groupId }: { id: string; groupId: string | null }) => {
+      const { error } = await supabase.from('saved_places').update({ group_id: groupId }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
+  })
+}
+
+export function usePlaceGroups() {
+  return useQuery({
+    queryKey: ['place_groups'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('place_groups')
+        .select('*')
+        .order('order_index', { ascending: true })
+      if (error) throw error
+      return data as PlaceGroup[]
+    },
+  })
+}
+
+export function useCreateGroup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase
+        .from('place_groups')
+        .insert({ name, order_index: Date.now() })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['place_groups'] }),
+  })
+}
+
+export function useDeleteGroup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('place_groups').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['place_groups'] })
+      qc.invalidateQueries({ queryKey: ['saved_places'] })
+    },
   })
 }

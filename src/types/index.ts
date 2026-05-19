@@ -1,5 +1,12 @@
 export type PlaceCategory = '음식점' | '카페' | '주점' | '기타'
 
+export type PlaceGroup = {
+  id: string
+  name: string
+  order_index: number
+  created_at: string
+}
+
 export type SavedPlace = {
   id: string
   name: string
@@ -9,6 +16,7 @@ export type SavedPlace = {
   memo: string
   companions: string[]
   category: PlaceCategory
+  group_id: string | null
   created_at: string
 }
 

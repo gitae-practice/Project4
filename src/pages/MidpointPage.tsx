@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw } from 'lucide-react'
+import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw, LocateFixed } from 'lucide-react'
 import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeywordWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
@@ -48,6 +48,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   const [activeSub, setActiveSub] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [locatingIdx, setLocatingIdx] = useState<number | null>(null)
 
   const createPlace = useCreatePlace()
   const { data: savedPlaces = [] } = useSavedPlaces()
@@ -95,6 +96,20 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
       : inp
     ))
     setSuggestions((prev) => ({ ...prev, [i]: [] }))
+  }
+
+  function handleLocate(i: number) {
+    if (!navigator.geolocation) return
+    setLocatingIdx(i)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coord = { lat: pos.coords.latitude, lng: pos.coords.longitude, name: '내 위치' }
+        setInputs(prev => prev.map((inp, idx) => idx === i ? { text: '내 위치', coord } : inp))
+        setLocatingIdx(null)
+      },
+      () => setLocatingIdx(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
   }
 
   function handleReset() {
@@ -155,7 +170,17 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     setActiveTab(idx)
     setActiveSub(null)
     if (!midpoint) return
-    if (idx === 2) { setPlaces([]); return }
+    if (idx === 2) {
+      setActiveSub(0)
+      setLoading(true)
+      try {
+        const { places: nearby, radius } = await fetchPlaces(2, 0, midpoint.lat, midpoint.lng)
+        setPlaces(nearby)
+        setSearchRadius(radius)
+      } catch (e) { console.error(e) }
+      finally { setLoading(false) }
+      return
+    }
     setLoading(true)
     try {
       const { places: nearby, radius } = await fetchPlaces(idx, null, midpoint.lat, midpoint.lng)
@@ -213,7 +238,21 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
                     placeholder={i === 0 ? '내 출발지' : `상대방 출발지 ${i}`}
                     className="flex-1 text-sm outline-none bg-transparent"
                   />
-                  {inp.coord && <Check size={13} className="text-green-500 flex-shrink-0" />}
+                  {inp.coord
+                    ? <Check size={13} className="text-green-500 flex-shrink-0" />
+                    : (
+                      <button
+                        onClick={() => handleLocate(i)}
+                        disabled={locatingIdx === i}
+                        className="text-gray-300 hover:text-blue-400 transition-colors flex-shrink-0"
+                        title="내 현재 위치 사용"
+                      >
+                        {locatingIdx === i
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <LocateFixed size={13} />}
+                      </button>
+                    )
+                  }
                 </div>
                 {(suggestions[i] ?? []).length > 0 && (
                   <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
@@ -242,11 +281,9 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
             <button onClick={addInput} className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors px-2 py-1">
               <Plus size={13} /> 추가
             </button>
-            {midpoint && (
-              <button onClick={handleReset} className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-400 transition-colors px-2 py-1">
-                <RotateCcw size={13} /> 초기화
-              </button>
-            )}
+            <button onClick={handleReset} className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-400 transition-colors px-2 py-1">
+              <RotateCcw size={13} /> 초기화
+            </button>
             <button
               onClick={handleSearch}
               disabled={loading}
