@@ -1,14 +1,20 @@
-import { useState, useRef } from 'react'
-import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike } from 'lucide-react'
+import { useState, useRef, useMemo, useEffect } from 'react'
+import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike, GripVertical } from 'lucide-react'
 import { useRoutes, useCreateRoute, useDeleteRoute } from '../hooks/useRoutes'
 import { getWeather } from '../lib/weather'
 import { searchKeyword, getDirections } from '../lib/kakao'
 import type { RouteOption } from '../lib/kakao'
 import type { Route, WeatherData, KakaoPlace } from '../types'
+import type { NavPoint } from '../App'
 import KakaoMap from '../components/KakaoMap'
 
 type Coord = { name: string; lat: number; lng: number }
 type TransportMode = 'transit' | 'car' | 'walk' | 'bike'
+
+type Props = {
+  destPreset?: NavPoint | null
+  onDestPresetApplied?: () => void
+}
 
 const MODES = [
   { id: 'transit' as TransportMode, label: '대중교통', Icon: Bus },
@@ -37,7 +43,7 @@ function formatDistance(m: number) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${m}m`
 }
 
-export default function RoutesPage() {
+export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
   const { data: routes = [], isLoading } = useRoutes()
   const createRoute = useCreateRoute()
   const deleteRoute = useDeleteRoute()
@@ -61,8 +67,49 @@ export default function RoutesPage() {
   const [weatherMap, setWeatherMap] = useState<Record<string, WeatherData>>({})
   const [loadingWeather, setLoadingWeather] = useState<string | null>(null)
 
+  // 드래그 정렬 상태 (localStorage 유지)
+  const [routeOrder, setRouteOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('route_order') || '[]') } catch { return [] }
+  })
+  const dragItem = useRef<string | null>(null)
+  const dragOver = useRef<string | null>(null)
+
   const originTimer = useRef<ReturnType<typeof setTimeout>>()
   const destTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  // 중간지점 탭에서 장소 클릭 시 목적지 자동 입력
+  useEffect(() => {
+    if (!destPreset) return
+    setAdding(true)
+    setDestInput(destPreset.name)
+    setDestCoord({ name: destPreset.name, lat: destPreset.lat, lng: destPreset.lng })
+    onDestPresetApplied?.()
+  }, [destPreset])
+
+  const sortedRoutes = useMemo(() => {
+    if (routeOrder.length === 0) return routes
+    const orderMap = new Map(routeOrder.map((id, i) => [id, i]))
+    return [...routes].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? orderMap.get(a.id)! : Infinity
+      const bi = orderMap.has(b.id) ? orderMap.get(b.id)! : Infinity
+      return ai - bi
+    })
+  }, [routes, routeOrder])
+
+  function handleDragStart(id: string) { dragItem.current = id }
+  function handleDragOver(e: React.DragEvent, id: string) { e.preventDefault(); dragOver.current = id }
+  function handleDrop() {
+    if (!dragItem.current || !dragOver.current || dragItem.current === dragOver.current) return
+    const newOrder = sortedRoutes.map(r => r.id)
+    const fromIdx = newOrder.indexOf(dragItem.current)
+    const toIdx = newOrder.indexOf(dragOver.current)
+    newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, dragItem.current)
+    setRouteOrder(newOrder)
+    localStorage.setItem('route_order', JSON.stringify(newOrder))
+    dragItem.current = null
+    dragOver.current = null
+  }
 
   function handleOriginChange(val: string) {
     setOriginInput(val); setOriginCoord(null)
@@ -123,26 +170,17 @@ export default function RoutesPage() {
 
     if (mode === 'car') {
       const options = await getDirections(origin, dest)
-      setRouteOptions(options)
-      setSelectedOption(0)
-      return
+      setRouteOptions(options); setSelectedOption(0); return
     }
+    if (mode === 'transit') { setRouteOptions([]); return }
 
-    if (mode === 'transit') {
-      setRouteOptions([])
-      return
-    }
-
-    // 도보/자전거: 직선 거리 기반 추정
     const straightDist = haversineDistance(origin, dest)
     const roadDist = Math.round(straightDist * 1.3)
     const speedMs = mode === 'walk' ? 5000 / 3600 : 15000 / 3600
-    const duration = Math.round(roadDist / speedMs)
-
     setRouteOptions([{
       priority: mode,
       label: mode === 'walk' ? '도보' : '자전거',
-      duration,
+      duration: Math.round(roadDist / speedMs),
       distance: roadDist,
       path: [origin, dest],
     }])
@@ -154,7 +192,6 @@ export default function RoutesPage() {
     setSelectedRoute(isAlready ? null : route)
     setRouteOptions([]); setSelectedOption(0)
     if (isAlready) return
-
     setLoadingDirections(true)
     try { await fetchDirectionsFor(route, transportMode) }
     catch (e) { console.error('길찾기 오류:', e) }
@@ -208,7 +245,6 @@ export default function RoutesPage() {
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽 */}
       <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-gray-50">
         {/* 교통수단 선택 */}
         <div className="flex-shrink-0 px-4 pt-3 pb-2 border-b border-gray-100 bg-white">
@@ -218,9 +254,7 @@ export default function RoutesPage() {
                 key={id}
                 onClick={() => handleModeChange(id)}
                 className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg text-xs transition-colors ${
-                  transportMode === id
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  transportMode === id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 <Icon size={18} strokeWidth={transportMode === id ? 2.2 : 1.6} />
@@ -248,7 +282,6 @@ export default function RoutesPage() {
                 placeholder="경로 이름 (예: 집 → 회사)"
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 transition-colors"
               />
-              {/* 출발지 */}
               <div className="relative">
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 bg-white">
                   <MapPin size={13} className="text-gray-400 flex-shrink-0" />
@@ -266,7 +299,6 @@ export default function RoutesPage() {
                   </div>
                 )}
               </div>
-              {/* 도착지 */}
               <div className="relative">
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 bg-white">
                   <MapPin size={13} className="text-blue-400 flex-shrink-0" />
@@ -301,38 +333,49 @@ export default function RoutesPage() {
           ) : routes.length === 0 ? (
             <p className="text-center text-sm text-gray-400 py-8">저장된 경로가 없습니다</p>
           ) : (
-            routes.map((route) => {
+            sortedRoutes.map((route) => {
               const weather = weatherMap[route.id]
               const isSelected = selectedRoute?.id === route.id
               return (
-                <div key={route.id} className={`bg-white rounded-lg border shadow-sm transition-all ${isSelected ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-100 hover:border-gray-200'}`}>
-                  <div className="px-4 py-3 cursor-pointer" onClick={() => selectRoute(route)}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{route.label}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">{route.origin_name} → {route.dest_name}</p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button onClick={(e) => { e.stopPropagation(); loadWeather(route) }} className="flex items-center gap-1 text-xs text-blue-500 hover:bg-blue-50 px-2 py-1.5 rounded-md transition-colors">
-                          {loadingWeather === route.id ? <Loader2 size={12} className="animate-spin" /> : <Cloud size={12} />} 날씨
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); deleteRoute.mutate(route.id) }} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-md transition-colors">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                <div
+                  key={route.id}
+                  draggable
+                  onDragStart={() => handleDragStart(route.id)}
+                  onDragOver={(e) => handleDragOver(e, route.id)}
+                  onDrop={handleDrop}
+                  className={`bg-white rounded-lg border shadow-sm transition-all ${isSelected ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-100 hover:border-gray-200'}`}
+                >
+                  <div className="px-3 py-3 cursor-pointer flex gap-2" onClick={() => selectRoute(route)}>
+                    <div className="flex items-center text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                      <GripVertical size={14} />
                     </div>
-                    {weather && (
-                      <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-3">
-                        <img src={`https://openweathermap.org/img/wn/${weather.icon}.png`} alt={weather.description} className="w-8 h-8" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{weather.temp}°C</p>
-                          <p className="text-xs text-gray-400">{weather.description} · 습도 {weather.humidity}%</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{route.label}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">{route.origin_name} → {route.dest_name}</p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); loadWeather(route) }} className="flex items-center gap-1 text-xs text-blue-500 hover:bg-blue-50 px-2 py-1.5 rounded-md transition-colors">
+                            {loadingWeather === route.id ? <Loader2 size={12} className="animate-spin" /> : <Cloud size={12} />} 날씨
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); deleteRoute.mutate(route.id) }} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-md transition-colors">
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
-                    )}
+                      {weather && (
+                        <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-3">
+                          <img src={`https://openweathermap.org/img/wn/${weather.icon}.png`} alt={weather.description} className="w-8 h-8" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{weather.temp}°C</p>
+                            <p className="text-xs text-gray-400">{weather.description} · 습도 {weather.humidity}%</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {/* 경로 옵션 */}
                   {isSelected && (
                     <div className="border-t border-gray-100 px-4 py-3">
                       {transportMode === 'transit' ? (
@@ -380,7 +423,6 @@ export default function RoutesPage() {
         </div>
       </div>
 
-      {/* 오른쪽: 지도 */}
       <div className="flex-1 relative">
         <KakaoMap
           center={mapCenter}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { MapPin, Trash2, Tag, Loader2 } from 'lucide-react'
-import { useSavedPlaces, useDeletePlace } from '../hooks/useSavedPlaces'
+import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X } from 'lucide-react'
+import { useSavedPlaces, useDeletePlace, useUpdatePlace } from '../hooks/useSavedPlaces'
 import type { PlaceCategory, SavedPlace } from '../types'
 import KakaoMap from '../components/KakaoMap'
 
@@ -14,7 +14,27 @@ const CATEGORY_COLOR: Record<PlaceCategory | '기타', string> = {
 export default function SavedPlacesPage() {
   const { data: places = [], isLoading } = useSavedPlaces()
   const deletePlace = useDeletePlace()
+  const updatePlace = useUpdatePlace()
   const [selected, setSelected] = useState<SavedPlace | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editMemo, setEditMemo] = useState('')
+
+  function startEdit(place: SavedPlace, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(place.id)
+    setEditMemo(place.memo || '')
+  }
+
+  function saveEdit(place: SavedPlace, e: React.MouseEvent) {
+    e.stopPropagation()
+    updatePlace.mutate({ id: place.id, memo: editMemo })
+    setEditingId(null)
+  }
+
+  function cancelEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(null)
+  }
 
   const mapCenter = selected
     ? { lat: selected.lat, lng: selected.lng }
@@ -44,9 +64,8 @@ export default function SavedPlacesPage() {
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽: 장소 목록 */}
       <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white">
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto p-4 pb-16 flex flex-col gap-2">
           {places.map((place) => (
             <div
               key={place.id}
@@ -64,14 +83,46 @@ export default function SavedPlacesPage() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5 truncate">{place.address}</p>
-                  {place.memo && <p className="text-xs text-gray-600 mt-1">"{place.memo}"</p>}
+
+                  {editingId === place.id ? (
+                    <div className="mt-2 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                      <textarea
+                        value={editMemo}
+                        onChange={(e) => setEditMemo(e.target.value)}
+                        placeholder="메모 입력..."
+                        rows={2}
+                        autoFocus
+                        className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 resize-none"
+                      />
+                      <div className="flex gap-1">
+                        <button onClick={(e) => saveEdit(place, e)} className="flex items-center gap-1 text-xs bg-blue-500 text-white px-2 py-1 rounded-md hover:bg-blue-600">
+                          <Check size={11} /> 저장
+                        </button>
+                        <button onClick={cancelEdit} className="flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md hover:bg-gray-200">
+                          <X size={11} /> 취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1 group/memo">
+                      {place.memo
+                        ? <p className="text-xs text-gray-600 flex-1">"{place.memo}"</p>
+                        : <p className="text-xs text-gray-300 flex-1 italic">메모 없음</p>
+                      }
+                      <button
+                        onClick={(e) => startEdit(place, e)}
+                        className="opacity-0 group-hover/memo:opacity-100 p-1 text-gray-400 hover:text-blue-500 transition-all flex-shrink-0"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    </div>
+                  )}
+
                   {place.companions.length > 0 && (
                     <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                       <Tag size={11} className="text-gray-400" />
                       {place.companions.map((c) => (
-                        <span key={c} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                          {c}
-                        </span>
+                        <span key={c} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{c}</span>
                       ))}
                     </div>
                   )}
@@ -88,7 +139,6 @@ export default function SavedPlacesPage() {
         </div>
       </div>
 
-      {/* 오른쪽: 지도 */}
       <div className="flex-1">
         <KakaoMap
           center={mapCenter}

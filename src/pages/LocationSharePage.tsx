@@ -1,15 +1,20 @@
 import { useState } from 'react'
-import { Navigation, Copy, StopCircle, Loader2, MapPin } from 'lucide-react'
+import { Navigation, Copy, StopCircle, Loader2, MapPin, LocateFixed } from 'lucide-react'
 import { useShareLocation, useWatchLocation } from '../hooks/useLocationShare'
+import type { NavPoint } from '../App'
 import KakaoMap from '../components/KakaoMap'
+
+type Props = { onNavigateToMidpoint: (points: NavPoint[]) => void }
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
 
-export default function LocationSharePage() {
+export default function LocationSharePage({ onNavigateToMidpoint }: Props) {
   const [label, setLabel] = useState('')
   const [isSharing, setIsSharing] = useState(false)
   const [watchCode, setWatchCode] = useState('')
   const [copied, setCopied] = useState(false)
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locating, setLocating] = useState(false)
 
   const { shareCode, error: shareError, start, stop } = useShareLocation()
   const { location, notFound } = useWatchLocation(watchCode)
@@ -32,17 +37,39 @@ export default function LocationSharePage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function getMyLocation() {
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocating(false)
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  function handleGoMidpoint() {
+    if (!myLocation || !location) return
+    onNavigateToMidpoint([
+      { name: '내 위치', lat: myLocation.lat, lng: myLocation.lng },
+      { name: location.label || '상대방', lat: location.lat, lng: location.lng },
+    ])
+  }
+
   const mapCenter = location ? { lat: location.lat, lng: location.lng } : DEFAULT_CENTER
-  const mapMarkers = location ? [{ lat: location.lat, lng: location.lng, label: location.label || '상대방 위치' }] : []
+  const mapMarkers = [
+    ...(location ? [{ lat: location.lat, lng: location.lng, label: location.label || '상대방 위치' }] : []),
+    ...(myLocation ? [{ lat: myLocation.lat, lng: myLocation.lng, label: '내 위치' }] : []),
+  ]
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽: 컨트롤 */}
-      <div className="w-96 flex-shrink-0 flex flex-col overflow-y-auto border-r border-gray-100 bg-gray-50 p-4 gap-4">
+      <div className="w-96 flex-shrink-0 flex flex-col overflow-y-auto border-r border-gray-100 bg-gray-50 p-4 gap-4 pb-16">
         {/* 내 위치 공유 */}
         <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
           <p className="text-sm font-medium text-gray-800 mb-3">내 위치 공유</p>
-
           {!shareCode ? (
             <div className="flex flex-col gap-2">
               <input
@@ -67,18 +94,12 @@ export default function LocationSharePage() {
                 <p className="text-sm text-blue-700 font-mono truncate">
                   {window.location.origin}?share={shareCode}
                 </p>
-                <button
-                  onClick={copyLink}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium flex-shrink-0 transition-colors"
-                >
+                <button onClick={copyLink} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex-shrink-0 transition-colors">
                   {copied ? '복사됨!' : <Copy size={13} />}
                 </button>
               </div>
               <p className="text-xs text-gray-400 text-center">링크를 상대방에게 전송하세요</p>
-              <button
-                onClick={handleStop}
-                className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm py-2.5 rounded-lg transition-colors"
-              >
+              <button onClick={handleStop} className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm py-2.5 rounded-lg transition-colors">
                 <StopCircle size={14} /> 공유 중단
               </button>
             </div>
@@ -97,6 +118,33 @@ export default function LocationSharePage() {
           />
           {notFound && <p className="text-xs text-red-500">코드를 찾을 수 없습니다</p>}
         </div>
+
+        {/* 중간지점 찾기 — 상대방 위치 확인된 경우만 표시 */}
+        {location && (
+          <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm flex flex-col gap-2">
+            <p className="text-sm font-medium text-gray-800">중간지점 찾기</p>
+            <button
+              onClick={getMyLocation}
+              disabled={locating}
+              className={`flex items-center justify-center gap-2 text-sm py-2 rounded-lg border transition-colors ${
+                myLocation
+                  ? 'border-green-300 text-green-600 bg-green-50'
+                  : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-500'
+              }`}
+            >
+              {locating ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+              {myLocation ? '내 위치 확인됨' : '내 현재 위치 가져오기'}
+            </button>
+            <button
+              onClick={handleGoMidpoint}
+              disabled={!myLocation}
+              className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white text-sm py-2.5 rounded-lg transition-colors"
+            >
+              <MapPin size={14} /> 중간지점 찾기
+            </button>
+            {!myLocation && <p className="text-xs text-gray-400 text-center">내 위치를 먼저 가져오세요</p>}
+          </div>
+        )}
 
         {/* 상태 표시 */}
         {location && (
@@ -124,12 +172,11 @@ export default function LocationSharePage() {
         )}
       </div>
 
-      {/* 오른쪽: 지도 */}
       <div className="flex-1 relative">
         <KakaoMap
           center={mapCenter}
           markers={mapMarkers}
-          zoom={location ? 15 : 11}
+          zoom={location ? 13 : 11}
           className="w-full h-full"
         />
         {!location && (

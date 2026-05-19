@@ -37,3 +37,14 @@ export function useDeletePlace() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
   })
 }
+
+export function useUpdatePlace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, memo }: { id: string; memo: string }) => {
+      const { error } = await supabase.from('saved_places').update({ memo }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['saved_places'] }),
+  })
+}

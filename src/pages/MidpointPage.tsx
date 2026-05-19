@@ -1,12 +1,19 @@
-import { useState, useMemo, useRef } from 'react'
-import { Plus, X, Search, MapPin, Loader2, Bookmark, Check } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation } from 'lucide-react'
 import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
+import type { NavPoint } from '../App'
 import KakaoMap from '../components/KakaoMap'
 
 type Coord = { lat: number; lng: number; name: string }
 type InputItem = { text: string; coord: Coord | null }
+
+type Props = {
+  preset?: NavPoint[] | null
+  onPresetApplied?: () => void
+  onNavigateToRoute?: (dest: NavPoint) => void
+}
 
 const TABS = [
   { label: '음식점', code: CATEGORY.RESTAURANT, category: '음식점' as PlaceCategory },
@@ -20,7 +27,7 @@ function formatRadius(m: number) {
   return m >= 1000 ? `${m / 1000}km` : `${m}m`
 }
 
-export default function MidpointPage() {
+export default function MidpointPage({ preset, onPresetApplied, onNavigateToRoute }: Props) {
   const [inputs, setInputs] = useState<InputItem[]>([{ text: '', coord: null }, { text: '', coord: null }])
   const [suggestions, setSuggestions] = useState<Record<number, KakaoPlace[]>>({})
   const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
@@ -36,6 +43,28 @@ export default function MidpointPage() {
   const createPlace = useCreatePlace()
   const { data: savedPlaces = [] } = useSavedPlaces()
   const savedNames = useMemo(() => new Set(savedPlaces.map((p) => p.name)), [savedPlaces])
+
+  // 위치공유 탭에서 프리셋으로 넘어온 경우 자동 검색
+  useEffect(() => {
+    if (!preset || preset.length < 2) return
+    const coords = preset.map(p => ({ lat: p.lat, lng: p.lng, name: p.name }))
+    setInputs(coords.map(c => ({ text: c.name, coord: c })))
+    const mid = calcMidpoint(coords)
+    setPoints(coords)
+    setMidpoint(mid)
+    setLoading(true)
+    searchByCategoryWithFallback(TABS[0].code, mid.lat, mid.lng)
+      .then(({ places: nearby, radius }) => {
+        setPlaces(nearby)
+        setSearchRadius(radius)
+        setActiveTab(0)
+      })
+      .catch(console.error)
+      .finally(() => {
+        setLoading(false)
+        onPresetApplied?.()
+      })
+  }, [preset])
 
   function isSaved(place: KakaoPlace) { return savedNames.has(place.place_name) }
 
@@ -126,7 +155,6 @@ export default function MidpointPage() {
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽 패널 */}
       <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white">
         {/* 출발지 입력 */}
         <div className="p-4 flex flex-col gap-2 border-b border-gray-100 flex-shrink-0">
@@ -234,15 +262,26 @@ export default function MidpointPage() {
                       <p className="text-xs text-gray-400 mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
                       {place.phone && <p className="text-xs text-gray-400">{place.phone}</p>}
                     </div>
-                    <button
-                      onClick={() => handleSave(place)}
-                      disabled={saved}
-                      className={`p-2 rounded-md transition-colors flex-shrink-0 ${
-                        saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
-                      }`}
-                    >
-                      <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {onNavigateToRoute && (
+                        <button
+                          onClick={() => onNavigateToRoute({ name: place.place_name, lat: Number(place.y), lng: Number(place.x) })}
+                          className="p-2 rounded-md text-gray-400 hover:text-green-500 hover:bg-green-50 transition-colors"
+                          title="경로 보기"
+                        >
+                          <Navigation size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleSave(place)}
+                        disabled={saved}
+                        className={`p-2 rounded-md transition-colors ${
+                          saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                        }`}
+                      >
+                        <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
+                      </button>
+                    </div>
                   </div>
                 )
               })}
@@ -251,7 +290,6 @@ export default function MidpointPage() {
         </div>
       </div>
 
-      {/* 오른쪽: 지도 */}
       <div className="flex-1 relative">
         <KakaoMap
           center={midpoint || DEFAULT_CENTER}
