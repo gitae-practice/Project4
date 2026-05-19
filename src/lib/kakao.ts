@@ -46,7 +46,7 @@ export async function searchByCategory(
     x: String(lng),
     y: String(lat),
     radius: String(radius),
-    size: '45',
+    size: '15',
     sort: 'distance',
   })
   const data = await kakaoFetch('/v2/local/search/category.json', params)
