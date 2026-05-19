@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw, LocateFixed } from 'lucide-react'
 import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeywordWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
-import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
+import { useCreatePlace, useDeletePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
 import type { NavPoint } from '../App'
 import KakaoMap from '../components/KakaoMap'
@@ -51,8 +51,9 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   const [locatingIdx, setLocatingIdx] = useState<number | null>(null)
 
   const createPlace = useCreatePlace()
+  const deletePlace = useDeletePlace()
   const { data: savedPlaces = [] } = useSavedPlaces()
-  const savedNames = useMemo(() => new Set(savedPlaces.map((p) => p.name)), [savedPlaces])
+  const savedMap = useMemo(() => new Map(savedPlaces.map(p => [p.name, p])), [savedPlaces])
 
   useEffect(() => {
     if (!preset || preset.length < 2) return
@@ -76,7 +77,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
       })
   }, [preset])
 
-  function isSaved(place: KakaoPlace) { return savedNames.has(place.place_name) }
+  function isSaved(place: KakaoPlace) { return savedMap.has(place.place_name) }
 
   function handleInputChange(i: number, val: string) {
     setInputs((prev) => prev.map((inp, idx) => idx === i ? { text: val, coord: null } : inp))
@@ -203,7 +204,14 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   }
 
   function handleSave(place: KakaoPlace) {
-    if (isSaved(place)) return
+    const existing = savedMap.get(place.place_name)
+    if (existing) {
+      deletePlace.mutate(existing.id)
+      return
+    }
+    const category: PlaceCategory = activeTab === 2 && activeSub !== null
+      ? OTHER_SUBS[activeSub].label as PlaceCategory
+      : TABS[activeTab].category
     createPlace.mutate({
       name: place.place_name,
       address: place.road_address_name || place.address_name,
@@ -211,7 +219,8 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
       lng: Number(place.x),
       memo: '',
       companions: [],
-      category: TABS[activeTab].category,
+      category,
+      group_id: null,
     })
   }
 
@@ -383,10 +392,12 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
                       )}
                       <button
                         onClick={() => handleSave(place)}
-                        disabled={saved}
                         className={`p-2 rounded-md transition-colors ${
-                          saved ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                          saved
+                            ? 'text-blue-500 bg-blue-50 hover:text-red-400 hover:bg-red-50'
+                            : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
                         }`}
+                        title={saved ? '저장 취소' : '저장'}
                       >
                         <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
                       </button>

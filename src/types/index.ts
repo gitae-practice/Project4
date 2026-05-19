@@ -1,4 +1,4 @@
-export type PlaceCategory = '음식점' | '카페' | '주점' | '기타'
+export type PlaceCategory = '음식점' | '카페' | '주점' | '기타' | '편의점' | '관광명소' | '문화시설' | '지하철역'
 
 export type PlaceGroup = {
   id: string
