@@ -24,9 +24,9 @@ const TABS = [
 type SubItem = { label: string; code?: string; keyword?: string }
 const OTHER_SUBS: SubItem[] = [
   { label: '편의점', code: 'CS2' },
-  { label: '노래방', keyword: '노래방' },
-  { label: '영화관', keyword: '영화관' },
   { label: '관광명소', code: 'AT4' },
+  { label: '문화시설', code: 'CT1' },
+  { label: '지하철역', code: 'SW8' },
 ]
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
@@ -278,12 +278,12 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
 
             {/* 기타 서브 카테고리 */}
             {activeTab === 2 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="grid grid-cols-4 gap-1.5 mt-2">
                 {OTHER_SUBS.map((sub, i) => (
                   <button
                     key={sub.label}
                     onClick={() => handleSubChange(i)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    className={`text-xs py-1.5 rounded-full border transition-colors ${
                       activeSub === i
                         ? 'bg-blue-500 text-white border-blue-500'
                         : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-500'
@@ -298,7 +298,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
         )}
 
         {/* 장소 목록 */}
-        <div className="flex-1 overflow-y-auto p-4 pb-16 flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto p-4 pb-24 flex flex-col gap-2">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-blue-400" size={24} />
