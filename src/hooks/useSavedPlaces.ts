@@ -110,3 +110,19 @@ export function useDeleteGroup() {
     },
   })
 }
+
+export function useDeleteGroupWithPlaces() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error: placesErr } = await supabase.from('saved_places').delete().eq('group_id', id)
+      if (placesErr) throw placesErr
+      const { error: groupErr } = await supabase.from('place_groups').delete().eq('id', id)
+      if (groupErr) throw groupErr
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['place_groups'] })
+      qc.invalidateQueries({ queryKey: ['saved_places'] })
+    },
+  })
+}

@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X, ChevronDown, ChevronRight, FolderPlus, GripVertical } from 'lucide-react'
 import {
   useSavedPlaces, useDeletePlace, useUpdatePlace, useUpdatePlaceGroup,
-  usePlaceGroups, useCreateGroup, useDeleteGroup,
+  usePlaceGroups, useCreateGroup, useDeleteGroup, useDeleteGroupWithPlaces,
 } from '../hooks/useSavedPlaces'
 import type { SavedPlace, PlaceGroup } from '../types'
 import KakaoMap from '../components/KakaoMap'
@@ -30,6 +30,8 @@ export default function SavedPlacesPage() {
   const updatePlaceGroup = useUpdatePlaceGroup()
   const createGroup = useCreateGroup()
   const deleteGroup = useDeleteGroup()
+  const deleteGroupWithPlaces = useDeleteGroupWithPlaces()
+  const [deleteTarget, setDeleteTarget] = useState<PlaceGroup | null>(null)
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<SavedPlace | null>(null)
@@ -162,7 +164,37 @@ export default function SavedPlacesPage() {
 
   return (
     <div className="flex h-full">
-      <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white">
+      <div className="w-96 flex-shrink-0 flex flex-col overflow-hidden border-r border-gray-100 bg-white relative">
+
+        {/* 분류 삭제 확인 팝업 */}
+        {deleteTarget && (
+          <div className="absolute inset-0 bg-black/30 z-50 flex items-center justify-center px-6">
+            <div className="bg-white rounded-xl shadow-xl p-5 w-full">
+              <p className="text-sm font-semibold text-gray-900 mb-1">"{deleteTarget.name}" 삭제</p>
+              <p className="text-xs text-gray-500 mb-4">이 분류 안의 장소를 어떻게 처리할까요?</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => { deleteGroup.mutate(deleteTarget.id); setDeleteTarget(null) }}
+                  className="w-full py-2.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                >
+                  분류만 삭제 (장소는 미분류로 이동)
+                </button>
+                <button
+                  onClick={() => { deleteGroupWithPlaces.mutate(deleteTarget.id); setDeleteTarget(null) }}
+                  className="w-full py-2.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  전체 삭제 (장소도 함께 삭제)
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
@@ -257,9 +289,9 @@ export default function SavedPlacesPage() {
                       <span className="text-sm font-medium text-gray-700 flex-1 truncate">{group.name}</span>
                       <span className="text-xs text-gray-400 flex-shrink-0">{groupPlaces.length}</span>
                       <button
-                        onClick={e => { e.stopPropagation(); deleteGroup.mutate(group.id) }}
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(group) }}
                         className="p-1 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="분류 삭제 (장소는 미분류로 이동)"
+                        title="분류 삭제"
                       >
                         <X size={12} />
                       </button>
