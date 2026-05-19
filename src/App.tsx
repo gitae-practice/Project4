@@ -43,21 +43,25 @@ function AppContent() {
 
       <div className="relative flex-1 min-h-0">
         <main className="absolute inset-0 overflow-hidden bg-gray-50">
-          {tab === 'midpoint' && (
+          <div className={tab === 'midpoint' ? 'h-full' : 'hidden'}>
             <MidpointPage
               preset={midpointPreset}
               onPresetApplied={() => setMidpointPreset(null)}
               onNavigateToRoute={goToRoute}
             />
-          )}
-          {tab === 'saved' && <SavedPlacesPage />}
-          {tab === 'routes' && (
+          </div>
+          <div className={tab === 'saved' ? 'h-full' : 'hidden'}>
+            <SavedPlacesPage />
+          </div>
+          <div className={tab === 'routes' ? 'h-full' : 'hidden'}>
             <RoutesPage
               destPreset={routeDest}
               onDestPresetApplied={() => setRouteDest(null)}
             />
-          )}
-          {tab === 'share' && <LocationSharePage onNavigateToMidpoint={goToMidpoint} />}
+          </div>
+          <div className={tab === 'share' ? 'h-full' : 'hidden'}>
+            <LocationSharePage onNavigateToMidpoint={goToMidpoint} />
+          </div>
         </main>
         <nav className="absolute bottom-0 left-0 w-96 flex border-t border-r border-gray-100 bg-white z-10">
           {TABS.map(({ id, label, Icon }) => (

@@ -11,11 +11,10 @@ async function kakaoFetch(endpoint: string, params: URLSearchParams): Promise<an
   return res.json()
 }
 
-// 카테고리 코드 상수
+// 카테고리 코드 상수 (카카오 Local API 지원 코드만 사용 — 주점은 별도 키워드 검색)
 export const CATEGORY = {
   RESTAURANT: 'FD6',
   CAFE: 'CE7',
-  BAR: 'PO3',
 } as const
 
 // 주소/키워드 → 좌표 변환 (주소 검색 → 실패 시 키워드 검색 폴백)
@@ -47,7 +46,7 @@ export async function searchByCategory(
     x: String(lng),
     y: String(lat),
     radius: String(radius),
-    size: '15',
+    size: '45',
     sort: 'distance',
   })
   const data = await kakaoFetch('/v2/local/search/category.json', params)
@@ -63,6 +62,26 @@ export async function searchByCategoryWithFallback(
   for (const radius of [1500, 3000, 5000, 10000]) {
     const places = await searchByCategory(categoryCode, lat, lng, radius)
     if (places.length > 0) return { places, radius }
+  }
+  return { places: [], radius: 10000 }
+}
+
+// 주점 키워드 검색 (카카오에 주점 카테고리 코드 없음)
+export async function searchBarWithFallback(
+  lat: number,
+  lng: number
+): Promise<{ places: KakaoPlace[]; radius: number }> {
+  for (const radius of [1500, 3000, 5000, 10000]) {
+    const params = new URLSearchParams({
+      query: '주점',
+      x: String(lng),
+      y: String(lat),
+      radius: String(radius),
+      size: '45',
+      sort: 'distance',
+    })
+    const data = await kakaoFetch('/v2/local/search/keyword.json', params)
+    if (data.documents.length > 0) return { places: data.documents, radius }
   }
   return { places: [], radius: 10000 }
 }

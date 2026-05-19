@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation } from 'lucide-react'
-import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
+import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw } from 'lucide-react'
+import { geocode, calcMidpoint, searchByCategoryWithFallback, searchBarWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
 import type { NavPoint } from '../App'
@@ -18,7 +18,7 @@ type Props = {
 const TABS = [
   { label: '음식점', code: CATEGORY.RESTAURANT, category: '음식점' as PlaceCategory },
   { label: '카페', code: CATEGORY.CAFE, category: '카페' as PlaceCategory },
-  { label: '주점', code: CATEGORY.BAR, category: '주점' as PlaceCategory },
+  { label: '주점', code: null, category: '주점' as PlaceCategory },
 ]
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 }
@@ -53,7 +53,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     setPoints(coords)
     setMidpoint(mid)
     setLoading(true)
-    searchByCategoryWithFallback(TABS[0].code, mid.lat, mid.lng)
+    searchPlaces(0, mid.lat, mid.lng)
       .then(({ places: nearby, radius }) => {
         setPlaces(nearby)
         setSearchRadius(radius)
@@ -88,6 +88,22 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     setSuggestions((prev) => ({ ...prev, [i]: [] }))
   }
 
+  function handleReset() {
+    setInputs([{ text: '', coord: null }, { text: '', coord: null }])
+    setSuggestions({})
+    setPoints([])
+    setMidpoint(null)
+    setPlaces([])
+    setSearchRadius(1500)
+    setSearchError('')
+  }
+
+  async function searchPlaces(tabIdx: number, lat: number, lng: number) {
+    const tab = TABS[tabIdx]
+    if (tab.code) return searchByCategoryWithFallback(tab.code, lat, lng)
+    return searchBarWithFallback(lat, lng)
+  }
+
   function addInput() { setInputs((prev) => [...prev, { text: '', coord: null }]) }
   function removeInput(i: number) {
     setInputs((prev) => prev.filter((_, idx) => idx !== i))
@@ -111,7 +127,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
       setPoints(valid)
       setMidpoint(mid)
 
-      const { places: nearby, radius } = await searchByCategoryWithFallback(TABS[activeTab].code, mid.lat, mid.lng)
+      const { places: nearby, radius } = await searchPlaces(activeTab, mid.lat, mid.lng)
       setPlaces(nearby)
       setSearchRadius(radius)
     } catch (e) {
@@ -127,7 +143,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     if (!midpoint) return
     setLoading(true)
     try {
-      const { places: nearby, radius } = await searchByCategoryWithFallback(TABS[idx].code, midpoint.lat, midpoint.lng)
+      const { places: nearby, radius } = await searchPlaces(idx, midpoint.lat, midpoint.lng)
       setPlaces(nearby)
       setSearchRadius(radius)
     } catch (e) { console.error(e) }
@@ -199,6 +215,11 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
             <button onClick={addInput} className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors px-2 py-1">
               <Plus size={13} /> 추가
             </button>
+            {midpoint && (
+              <button onClick={handleReset} className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-400 transition-colors px-2 py-1">
+                <RotateCcw size={13} /> 초기화
+              </button>
+            )}
             <button
               onClick={handleSearch}
               disabled={loading}
