@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw, LocateFixed } from 'lucide-react'
+import { Plus, X, Search, MapPin, Loader2, Bookmark, Check, Navigation, RotateCcw, LocateFixed, Users } from 'lucide-react'
 import { geocode, calcMidpoint, searchByCategoryWithFallback, searchKeywordWithFallback, searchKeyword, CATEGORY } from '../lib/kakao'
 import { useCreatePlace, useDeletePlace, useSavedPlaces } from '../hooks/useSavedPlaces'
 import type { KakaoPlace, PlaceCategory } from '../types'
@@ -49,6 +49,8 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [locatingIdx, setLocatingIdx] = useState<number | null>(null)
+  const [savingPlace, setSavingPlace] = useState<KakaoPlace | null>(null)
+  const [companionInput, setCompanionInput] = useState('')
 
   const createPlace = useCreatePlace()
   const deletePlace = useDeletePlace()
@@ -203,25 +205,32 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
     finally { setLoading(false) }
   }
 
-  function handleSave(place: KakaoPlace) {
+  function handleBookmarkClick(place: KakaoPlace) {
     const existing = savedMap.get(place.place_name)
-    if (existing) {
-      deletePlace.mutate(existing.id)
-      return
-    }
+    if (existing) { deletePlace.mutate(existing.id); return }
+    setSavingPlace(place)
+    setCompanionInput('')
+  }
+
+  function confirmSave() {
+    if (!savingPlace) return
     const category: PlaceCategory = activeTab === 2 && activeSub !== null
       ? OTHER_SUBS[activeSub].label as PlaceCategory
       : TABS[activeTab].category
+    const companions = companionInput.trim()
+      ? companionInput.split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
+      : []
     createPlace.mutate({
-      name: place.place_name,
-      address: place.road_address_name || place.address_name,
-      lat: Number(place.y),
-      lng: Number(place.x),
+      name: savingPlace.place_name,
+      address: savingPlace.road_address_name || savingPlace.address_name,
+      lat: Number(savingPlace.y),
+      lng: Number(savingPlace.x),
       memo: '',
-      companions: [],
+      companions,
       category,
       group_id: null,
     })
+    setSavingPlace(null)
   }
 
   const mapMarkers = [
@@ -344,7 +353,7 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
         )}
 
         {/* 장소 목록 */}
-        <div className="flex-1 overflow-y-auto p-4 pb-24 flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-blue-400" size={24} />
@@ -373,40 +382,69 @@ export default function MidpointPage({ preset, onPresetApplied, onNavigateToRout
               )}
               {places.map((place) => {
                 const saved = isSaved(place)
+                const isSavingThis = savingPlace?.id === place.id
                 return (
-                  <div key={place.id} className="bg-white rounded-lg border border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{place.place_name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
-                      {place.phone && <p className="text-xs text-gray-400">{place.phone}</p>}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {onNavigateToRoute && (
+                  <div key={place.id} className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{place.place_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
+                        {place.phone && <p className="text-xs text-gray-400">{place.phone}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {onNavigateToRoute && (
+                          <button
+                            onClick={() => onNavigateToRoute({ name: place.place_name, lat: Number(place.y), lng: Number(place.x) })}
+                            className="p-2 rounded-md text-gray-400 hover:text-green-500 hover:bg-green-50 transition-colors"
+                            title="경로 보기"
+                          >
+                            <Navigation size={14} />
+                          </button>
+                        )}
                         <button
-                          onClick={() => onNavigateToRoute({ name: place.place_name, lat: Number(place.y), lng: Number(place.x) })}
-                          className="p-2 rounded-md text-gray-400 hover:text-green-500 hover:bg-green-50 transition-colors"
-                          title="경로 보기"
+                          onClick={() => handleBookmarkClick(place)}
+                          className={`p-2 rounded-md transition-colors ${
+                            saved
+                              ? 'text-blue-500 bg-blue-50 hover:text-red-400 hover:bg-red-50'
+                              : isSavingThis
+                              ? 'text-blue-400 bg-blue-50'
+                              : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                          }`}
+                          title={saved ? '저장 취소' : '저장'}
                         >
-                          <Navigation size={14} />
+                          <Bookmark size={15} fill={saved || isSavingThis ? 'currentColor' : 'none'} />
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleSave(place)}
-                        className={`p-2 rounded-md transition-colors ${
-                          saved
-                            ? 'text-blue-500 bg-blue-50 hover:text-red-400 hover:bg-red-50'
-                            : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
-                        }`}
-                        title={saved ? '저장 취소' : '저장'}
-                      >
-                        <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
-                      </button>
+                      </div>
                     </div>
+                    {isSavingThis && (
+                      <div className="px-4 pb-3 flex flex-col gap-2 border-t border-gray-50">
+                        <div className="flex items-center gap-1.5 pt-2">
+                          <Users size={12} className="text-gray-400 flex-shrink-0" />
+                          <input
+                            autoFocus
+                            value={companionInput}
+                            onChange={e => setCompanionInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && confirmSave()}
+                            placeholder="동행인 이름 (공백/쉼표로 구분, 선택)"
+                            className="flex-1 text-xs border border-gray-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400"
+                          />
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={confirmSave} className="flex-1 flex items-center justify-center gap-1 text-xs bg-blue-500 text-white py-1.5 rounded-md hover:bg-blue-600">
+                            <Check size={11} /> 저장
+                          </button>
+                          <button onClick={() => setSavingPlace(null)} className="flex items-center justify-center px-3 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200">
+                            <X size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </>
           )}
+          <div className="h-20 flex-shrink-0" />
         </div>
       </div>
 

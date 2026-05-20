@@ -66,7 +66,7 @@ export default function LocationSharePage({ onNavigateToMidpoint }: Props) {
 
   return (
     <div className="flex h-full">
-      <div className="w-96 flex-shrink-0 flex flex-col overflow-y-auto border-r border-gray-100 bg-gray-50 p-4 gap-4 pb-16">
+      <div className="w-96 flex-shrink-0 flex flex-col overflow-y-auto border-r border-gray-100 bg-gray-50 p-4 gap-4">
         {/* 내 위치 공유 */}
         <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
           <p className="text-sm font-medium text-gray-800 mb-3">내 위치 공유</p>
@@ -170,6 +170,7 @@ export default function LocationSharePage({ onNavigateToMidpoint }: Props) {
             <p className="text-sm">공유를 시작하거나 코드를 입력하세요</p>
           </div>
         )}
+        <div className="h-20 flex-shrink-0" />
       </div>
 
       <div className="flex-1 relative">

@@ -37,9 +37,6 @@ function AppContent() {
 
   return (
     <div className="flex flex-col h-screen bg-white">
-      <header className="flex-shrink-0 px-6 py-3 border-b border-gray-100 bg-white">
-        <h1 className="text-base font-semibold text-gray-900">중간어디</h1>
-      </header>
 
       <div className="relative flex-1 min-h-0">
         <main className="absolute inset-0 overflow-hidden bg-gray-50">

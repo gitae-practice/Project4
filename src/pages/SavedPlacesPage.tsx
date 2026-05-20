@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X, ChevronDown, ChevronRight, FolderPlus, GripVertical } from 'lucide-react'
+import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X, ChevronDown, ChevronRight, FolderPlus, GripVertical, Users } from 'lucide-react'
 import {
   useSavedPlaces, useDeletePlace, useUpdatePlace, useUpdatePlaceGroup,
   usePlaceGroups, useCreateGroup, useDeleteGroup, useDeleteGroupWithPlaces,
@@ -39,6 +39,7 @@ export default function SavedPlacesPage() {
   const [editMemo, setEditMemo] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
+  const [filterCompanion, setFilterCompanion] = useState<string | null>(null)
 
   // 폴더 순서
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadLS('saved_group_order', []))
@@ -61,6 +62,17 @@ export default function SavedPlacesPage() {
     return [...groups].sort((a, b) => (map.get(a.id) ?? Infinity) - (map.get(b.id) ?? Infinity))
   }, [groups, groupOrder])
 
+  const allCompanions = useMemo(() => {
+    const set = new Set<string>()
+    places.forEach(p => p.companions.forEach(c => set.add(c)))
+    return [...set].sort()
+  }, [places])
+
+  const visiblePlaces = useMemo(
+    () => filterCompanion ? places.filter(p => p.companions.includes(filterCompanion)) : places,
+    [places, filterCompanion]
+  )
+
   function getSortedPlaces(key: string, list: SavedPlace[]) {
     const order: string[] = placeOrders[key] ?? []
     if (!order.length) return list
@@ -68,7 +80,7 @@ export default function SavedPlacesPage() {
     return [...list].sort((a, b) => (map.get(a.id) ?? Infinity) - (map.get(b.id) ?? Infinity))
   }
 
-  const ungrouped = getSortedPlaces('ungrouped', places.filter(p => !p.group_id))
+  const ungrouped = getSortedPlaces('ungrouped', visiblePlaces.filter(p => !p.group_id))
 
   function toggleGroup(id: string) {
     setOpenGroups(prev => {
@@ -198,11 +210,33 @@ export default function SavedPlacesPage() {
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <p className="text-sm font-medium text-gray-700">내 장소 <span className="text-gray-400 font-normal">({places.length})</span></p>
+          <p className="text-sm font-medium text-gray-700">
+            내 장소 <span className="text-gray-400 font-normal">({filterCompanion ? visiblePlaces.length + '/' : ''}{places.length})</span>
+          </p>
           <button onClick={() => setCreatingGroup(true)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors">
             <FolderPlus size={14} /> 새 분류
           </button>
         </div>
+
+        {/* 동행인 필터 */}
+        {allCompanions.length > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 overflow-x-auto flex-shrink-0 scrollbar-none">
+            <Users size={12} className="text-gray-300 flex-shrink-0" />
+            {allCompanions.map(c => (
+              <button
+                key={c}
+                onClick={() => setFilterCompanion(prev => prev === c ? null : c)}
+                className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  filterCompanion === c
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 새 분류 입력 */}
         {creatingGroup && (
@@ -225,7 +259,7 @@ export default function SavedPlacesPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pb-24">
+        <div className="flex-1 overflow-y-auto">
           {places.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400">
               <MapPin size={32} className="opacity-40" />
@@ -237,7 +271,15 @@ export default function SavedPlacesPage() {
               {/* 미분류 */}
               {ungrouped.length > 0 && (
                 <div className="border-b border-gray-50">
-                  <p className="px-4 py-2 text-xs text-gray-400 font-medium">미분류</p>
+                  <div
+                    className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => toggleGroup('ungrouped')}
+                  >
+                    {openGroups.has('ungrouped') ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={13} className="text-gray-400 flex-shrink-0" />}
+                    <span className="text-xs text-gray-400 font-medium flex-1">미분류</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{ungrouped.length}</span>
+                  </div>
+                  {openGroups.has('ungrouped') && (
                   <div className="px-3 pb-2 flex flex-col gap-1.5">
                     {ungrouped.map(place => (
                       <PlaceCard
@@ -256,13 +298,14 @@ export default function SavedPlacesPage() {
                       />
                     ))}
                   </div>
+                  )}
                 </div>
               )}
 
               {/* 분류 폴더들 */}
               {sortedGroups.map(group => {
                 const open = openGroups.has(group.id)
-                const groupPlaces = getSortedPlaces(group.id, places.filter(p => p.group_id === group.id))
+                const groupPlaces = getSortedPlaces(group.id, visiblePlaces.filter(p => p.group_id === group.id))
                 const isDropTarget = dropTargetGroup === group.id
                 return (
                   <div
@@ -327,13 +370,14 @@ export default function SavedPlacesPage() {
               })}
             </>
           )}
+          <div className="h-20 flex-shrink-0" />
         </div>
       </div>
 
       <div className="flex-1">
         <KakaoMap
           center={mapCenter}
-          markers={places.map(p => ({ lat: p.lat, lng: p.lng, label: p.name }))}
+          markers={visiblePlaces.map(p => ({ lat: p.lat, lng: p.lng, label: p.name }))}
           zoom={selected ? 15 : 12}
           className="w-full h-full"
         />

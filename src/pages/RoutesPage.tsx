@@ -296,7 +296,7 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
         </div>
 
         {/* 경로 목록 */}
-        <div className="flex-1 overflow-y-auto p-4 pb-16 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {!adding && (
             <div className="flex gap-2">
               <button
@@ -471,6 +471,7 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
               )
             })
           )}
+          <div className="h-20 flex-shrink-0" />
         </div>
       </div>
 
