@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
-import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike, GripVertical, LocateFixed, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, MapPin, Cloud, Loader2, X, Check, Navigation, Bus, Car, PersonStanding, Bike, GripVertical, LocateFixed, RotateCcw, Search } from 'lucide-react'
 import { useRoutes, useCreateRoute, useDeleteRoute } from '../hooks/useRoutes'
 import { getWeather } from '../lib/weather'
 import { searchKeyword, getDirections } from '../lib/kakao'
@@ -69,6 +69,8 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
   const [weatherMap, setWeatherMap] = useState<Record<string, WeatherData>>({})
   const [loadingWeather, setLoadingWeather] = useState<string | null>(null)
 
+  const [searchQuery, setSearchQuery] = useState('')
+
   // 드래그 정렬 상태 (localStorage 유지)
   const [routeOrder, setRouteOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('route_order') || '[]') } catch { return [] }
@@ -97,6 +99,16 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
       return ai - bi
     })
   }, [routes, routeOrder])
+
+  const filteredRoutes = useMemo(() => {
+    if (!searchQuery.trim()) return sortedRoutes
+    const q = searchQuery.trim().toLowerCase()
+    return sortedRoutes.filter(r =>
+      r.label.toLowerCase().includes(q) ||
+      r.origin_name.toLowerCase().includes(q) ||
+      r.dest_name.toLowerCase().includes(q)
+    )
+  }, [sortedRoutes, searchQuery])
 
   function handleDragStart(id: string) { dragItem.current = id }
   function handleDragOver(e: React.DragEvent, id: string) { e.preventDefault(); dragOver.current = id }
@@ -295,6 +307,24 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
           </div>
         </div>
 
+        {/* 검색 */}
+        <div className="px-3 py-2 border-b border-gray-100 bg-white flex-shrink-0">
+          <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 focus-within:bg-white focus-within:ring-1 focus-within:ring-blue-300 transition-all">
+            <Search size={13} className="text-gray-400 flex-shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="경로명, 출발지, 도착지 검색"
+              className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-gray-300 hover:text-gray-500 flex-shrink-0">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* 경로 목록 */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {!adding && (
@@ -381,10 +411,10 @@ export default function RoutesPage({ destPreset, onDestPresetApplied }: Props) {
 
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="animate-spin text-blue-400" size={24} /></div>
-          ) : routes.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">저장된 경로가 없습니다</p>
+          ) : filteredRoutes.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-8">{searchQuery ? '검색 결과가 없습니다' : '저장된 경로가 없습니다'}</p>
           ) : (
-            sortedRoutes.map((route) => {
+            filteredRoutes.map((route) => {
               const weather = weatherMap[route.id]
               const isSelected = selectedRoute?.id === route.id
               return (
