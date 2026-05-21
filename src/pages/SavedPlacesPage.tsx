@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X, ChevronDown, ChevronRight, FolderPlus, GripVertical, Users } from 'lucide-react'
+import { MapPin, Trash2, Tag, Loader2, Pencil, Check, X, ChevronDown, ChevronRight, FolderPlus, GripVertical, Users, Search } from 'lucide-react'
 import {
   useSavedPlaces, useDeletePlace, useUpdatePlace, useUpdatePlaceGroup,
   usePlaceGroups, useCreateGroup, useDeleteGroup, useDeleteGroupWithPlaces,
@@ -40,6 +40,7 @@ export default function SavedPlacesPage() {
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [filterCompanion, setFilterCompanion] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // 폴더 순서
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadLS('saved_group_order', []))
@@ -68,10 +69,15 @@ export default function SavedPlacesPage() {
     return [...set].sort()
   }, [places])
 
-  const visiblePlaces = useMemo(
-    () => filterCompanion ? places.filter(p => p.companions.includes(filterCompanion)) : places,
-    [places, filterCompanion]
-  )
+  const visiblePlaces = useMemo(() => {
+    let result = places
+    if (filterCompanion) result = result.filter(p => p.companions.includes(filterCompanion))
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      result = result.filter(p => p.name.toLowerCase().includes(q) || p.address.toLowerCase().includes(q))
+    }
+    return result
+  }, [places, filterCompanion, searchQuery])
 
   function getSortedPlaces(key: string, list: SavedPlace[]) {
     const order: string[] = placeOrders[key] ?? []
@@ -81,6 +87,11 @@ export default function SavedPlacesPage() {
   }
 
   const ungrouped = getSortedPlaces('ungrouped', visiblePlaces.filter(p => !p.group_id))
+
+  function isGroupOpen(id: string) {
+    if (searchQuery.trim()) return true
+    return openGroups.has(id)
+  }
 
   function toggleGroup(id: string) {
     setOpenGroups(prev => {
@@ -211,11 +222,29 @@ export default function SavedPlacesPage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
           <p className="text-sm font-medium text-gray-700">
-            내 장소 <span className="text-gray-400 font-normal">({filterCompanion ? visiblePlaces.length + '/' : ''}{places.length})</span>
+            내 장소 <span className="text-gray-400 font-normal">({(searchQuery.trim() || filterCompanion) ? visiblePlaces.length + '/' : ''}{places.length})</span>
           </p>
           <button onClick={() => setCreatingGroup(true)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors">
             <FolderPlus size={14} /> 새 분류
           </button>
+        </div>
+
+        {/* 검색 */}
+        <div className="px-3 py-2 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 focus-within:bg-white focus-within:ring-1 focus-within:ring-blue-300 transition-all">
+            <Search size={13} className="text-gray-400 flex-shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="장소명, 주소 검색"
+              className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-gray-300 hover:text-gray-500 flex-shrink-0">
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 동행인 필터 */}
@@ -275,11 +304,11 @@ export default function SavedPlacesPage() {
                     className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
                     onClick={() => toggleGroup('ungrouped')}
                   >
-                    {openGroups.has('ungrouped') ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={13} className="text-gray-400 flex-shrink-0" />}
+                    {isGroupOpen('ungrouped') ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={13} className="text-gray-400 flex-shrink-0" />}
                     <span className="text-xs text-gray-400 font-medium flex-1">미분류</span>
                     <span className="text-xs text-gray-400 flex-shrink-0">{ungrouped.length}</span>
                   </div>
-                  {openGroups.has('ungrouped') && (
+                  {isGroupOpen('ungrouped') && (
                   <div className="px-3 pb-2 flex flex-col gap-1.5">
                     {ungrouped.map(place => (
                       <PlaceCard
@@ -304,7 +333,7 @@ export default function SavedPlacesPage() {
 
               {/* 분류 폴더들 */}
               {sortedGroups.map(group => {
-                const open = openGroups.has(group.id)
+                const open = isGroupOpen(group.id)
                 const groupPlaces = getSortedPlaces(group.id, visiblePlaces.filter(p => p.group_id === group.id))
                 const isDropTarget = dropTargetGroup === group.id
                 return (
